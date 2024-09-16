@@ -5,9 +5,14 @@
 //Gas engine (LPG/LNG)
 
 use bevy::prelude::*;
+//use bevy_egui::EguiPlugin;
+use bevy_inspector_egui::quick::ResourceInspectorPlugin;
+use bevy_inspector_egui::{prelude::*, quick::WorldInspectorPlugin};
 
 mod camera;
 mod components;
+mod constants;
+mod debug;
 
 use components::{
     beam::*, boiler::*, chain::*, cylinder::*, pipe::*, piston::*, pump::*, tank::*, valves::*,
@@ -15,11 +20,15 @@ use components::{
 };
 
 use camera::CameraPlugin;
+use debug::DebugPlugin;
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(CameraPlugin)
+        .add_plugins(WorldInspectorPlugin::new())
+        .add_plugins(DebugPlugin)
+        .add_plugins(BoilerPlugin)
         .run();
 }
 
