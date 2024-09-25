@@ -1,21 +1,27 @@
-use bevy::prelude::*;
-
-use crate::constants::{
-    IDEAL_GAS_CONSTANT, STANDARD_ATMOSPHERE_PRESSURE, STANDARD_TEMPERATURE_NIST,
+use bevy::{
+    prelude::*,
+    sprite::{MaterialMesh2dBundle, Mesh2dHandle},
 };
+
+//Program-wide constants
+use crate::state_variables::{pressure::Pressure, temperature::Temperature, volume::Dimension};
+//Local constants
+const MOL: f32 = 0.00000000001;
 
 pub struct BoilerPlugin;
 
 impl Plugin for BoilerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, firebox_setup)
-            .add_systems(Update, temperature_changes_boiler)
-            .add_systems(PostUpdate, pressure_changes_boiler);
+            .add_systems(PostStartup, firebox_dimension_setup);
     }
 }
 
 #[derive(Component)]
 pub struct Boiler;
+
+#[derive(Component)]
+pub struct Firebox;
 
 /// Basic set of components for the boiler.
 /// Used in the Newcomen engine.
@@ -42,112 +48,75 @@ pub struct FireboxBundle {
     component_name: Boiler,
     /// Dimensions of the firebox in metres. This allows volume to be calculated.
     dimensions: Dimension,
+    /// Pressure of the system in Pascals (Newtons per square metre). Default is set to atmospheric pressure at sea level.
     pressure: Pressure,
     temperature: Temperature,
+    /// Amount of substance in the firebox. Measured in mols
+    substance: Substance,
 }
 
 fn firebox_setup(mut commands: Commands) {
-    let firebox = commands.spawn(FireboxBundle {
-        component_name: Boiler,
-        dimensions: Dimension::new(Vec2::new(10., 10.)),
-        pressure: Pressure::default(),
-        temperature: Temperature::default(),
+    let firebox = commands.spawn((
+        FireboxBundle {
+            component_name: Boiler,
+            dimensions: Dimension::new(Vec2::new(100., 100.)),
+            pressure: Pressure::default(),
+            temperature: Temperature::default(),
+            substance: Substance::default(),
+        },
+        Firebox,
+    ));
+}
+
+fn firebox_dimension_setup(
+    mut commands: Commands,
+    mut mesh: ResMut<Assets<Mesh>>,
+    mut material: ResMut<Assets<ColorMaterial>>,
+    dimension_query: Query<&Dimension>,
+) {
+    let firebox_dimension_query = dimension_query.single();
+    let firebox_dimension = (
+        firebox_dimension_query.dim_x(),
+        firebox_dimension_query.dim_y(),
+    );
+    let firebox_shape =
+        Mesh2dHandle(mesh.add(Rectangle::new(firebox_dimension.0, firebox_dimension.1)));
+    let firebox_shape_colour = Color::srgb(0.5, 0.5, 0.5);
+    commands.spawn(MaterialMesh2dBundle {
+        mesh: firebox_shape,
+        material: material.add(firebox_shape_colour),
+        transform: Transform::IDENTITY.with_scale(Vec3::splat(1.)),
+        ..default()
     });
 }
 
-fn temperature_changes_boiler(mut temperature_query: Query<&mut Temperature, With<Boiler>>) {
-    for mut temperature in temperature_query.iter_mut() {
-        temperature.0 = temperature.0 + 1.
-    }
-}
-
-fn pressure_changes_boiler(
-    mut pressure_query: Query<(&mut Pressure, &Temperature, &Dimension), With<Boiler>>,
+fn adjust_mol_with_keyboard(
+    mut substance_query: Query<&mut Substance>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
 ) {
-    for (mut pressure, temperature, dimension) in pressure_query.iter_mut() {
-        let volume = dimension.volume();
-        let mol = 1.;
-        let constant = (pressure.0 * volume) / temperature.temperature();
-        pressure.0 = (constant * temperature.temperature()) / volume
+    for mut substance in substance_query.iter_mut() {
+        for key in keyboard_input.get_pressed() {
+            if *key == KeyCode::KeyW {
+                substance.0 += 0.20
+            }
+            if *key == KeyCode::KeyS {
+                substance.0 -= 0.20
+            }
+        }
     }
 }
 
 #[derive(Component)]
-pub struct Dimension(Vec2);
+pub struct Substance(f32);
 
-impl Dimension {
-    pub fn new(dimension: Vec2) -> Self {
-        Self(dimension)
-    }
-
-    /// Calculates the internal volume of the firebox.
-    pub fn volume(&self) -> f32 {
-        let length = self.dim_x();
-        let height = self.dim_y();
-        length * height
-    }
-
-    /// Helper function for returning x dimension.
-    pub fn dim_x(&self) -> f32 {
-        self.0.x
-    }
-
-    /// Helper function for returning y dimension.
-    pub fn dim_y(&self) -> f32 {
-        self.0.y
+impl Substance {
+    fn new(mol: f32) -> Self {
+        Self(mol)
     }
 }
 
-/// Generic pressure component (no real particular design or setup).
-///
-/// Attaches to a component which requires calculations of pressure.
-/// Allows for default pressure (atmosphere pressure) to be quickly referenced.
-#[derive(Component, Debug)]
-pub struct Pressure(f32);
-
-impl Pressure {
-    /// Units in Pascals. 1 Pascal = 1 newton per square metre. 1 atm = 101,325 Pascals. [Pascal](https://en.wikipedia.org/wiki/Pascal_(unit))
-    pub fn new(pressure: f32) -> Self {
-        Self(pressure)
-    }
-
-    /// Helper function for returning pressure value.
-    pub fn pressure(&self) -> f32 {
-        self.0
-    }
-}
-
-impl Default for Pressure {
-    /// Atmosphere pressure.
-    /// 1 atm = 101,325 Pascals (101.325 MPa). "Mean sea-level pressure".
+impl Default for Substance {
     fn default() -> Self {
-        Self(STANDARD_ATMOSPHERE_PRESSURE)
-    }
-}
-
-/// Generic temperature component.
-///
-/// Attaches to a component which requires tracking and calculations of temperature.
-/// Allows for default temperature (room temperature) to be quickly referenced.
-#[derive(Component, Debug)]
-pub struct Temperature(f32);
-
-impl Temperature {
-    /// Units in Kelvin. Standard (room) temperature = 293.15 Kelvin.
-    fn new(temperature: f32) -> Self {
-        Self(temperature)
-    }
-
-    /// Helper function for returning temperature value.
-    pub fn temperature(&self) -> f32 {
-        self.0
-    }
-}
-
-impl Default for Temperature {
-    /// Standard (room) temperature.
-    /// 293.15 K (20 degrees Celcius).
-    fn default() -> Self {
-        Self(STANDARD_TEMPERATURE_NIST)
+        Self(MOL)
     }
 }

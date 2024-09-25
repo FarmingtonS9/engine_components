@@ -1,12 +1,14 @@
 [package]
 name = "engine_components"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 
 [dependencies]
 bevy = "0.14"
 bevy_egui = "0.29"
-bevy-inspector-egui = "0.25"
+sickle_ui = "0.3"
+bevy-inspector-egui = "0.26"
+rand = "0.8"
 
 [workspace]
 resolver = "2" # Important! wgpu/Bevy needs this!
